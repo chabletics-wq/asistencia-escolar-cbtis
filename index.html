@@ -189,12 +189,12 @@
         }
 
         function enviarASheets(datos) {
-            if (GOOGLE_SCRIPT_URL.includes("TU_SCRIPT_ID")) {
+            if (https://script.google.com/macros/s/AKfycbxSnRypJiEs1KvJFOr78Oa0LonmCCdlOSfAcLsCgFfd80PgyRcpF9ryZAhTxPf47dVo/exec.includes("TU_SCRIPT_ID")) {
                 console.warn("URL de Google Sheets no configurada. El registro solo es local.");
                 return;
             }
 
-            fetch(GOOGLE_SCRIPT_URL, {
+            fetch(https://script.google.com/macros/s/AKfycbxSnRypJiEs1KvJFOr78Oa0LonmCCdlOSfAcLsCgFfd80PgyRcpF9ryZAhTxPf47dVo/exec, {
                 method: "POST",
                 mode: "no-cors",
                 headers: {
