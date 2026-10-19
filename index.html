@@ -1,1 +1,232 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Asistencia - Cultura Digital</title>
+    <!-- Tailwind CSS para un diseño limpio y responsivo -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Librería html5-qrcode para escanear códigos QR -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+    <!-- Librería cliente de Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
 
+    <!-- Encabezado -->
+    <header class="bg-slate-800 border-b border-slate-700 p-4 shadow-md text-center">
+        <h1 class="text-xl font-bold text-cyan-400">Control de Asistencia</h1>
+        <p class="text-xs text-slate-400 mt-1">Cultura Digital | CBTIS 272</p>
+    </header>
+
+    <!-- Contenido Principal -->
+    <main class="flex-1 max-w-md w-full mx-auto p-4 flex flex-col gap-4">
+
+        <!-- Configuración de la Sesión (Materia, Grupo y Aula) -->
+        <div class="bg-slate-800 p-3 rounded-xl border border-slate-700 shadow flex flex-col gap-3">
+            <div>
+                <label for="selectMateria" class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Materia:</label>
+                <select id="selectMateria" class="w-full mt-1 bg-slate-900 border border-slate-600 text-white text-sm rounded-lg p-2.5 outline-none focus:border-cyan-500">
+                    <option value="Cultura Digital I">Cultura Digital I</option>
+                    <option value="Cultura Digital II">Cultura Digital II</option>
+                </select>
+            </div>
+
+            <div class="flex gap-2">
+                <div class="flex-1">
+                    <label for="selectGrupo" class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Grupo y Turno:</label>
+                    <select id="selectGrupo" class="w-full mt-1 bg-slate-900 border border-slate-600 text-white text-sm rounded-lg p-2.5 outline-none focus:border-cyan-500">
+                        <option value="1A-AV">1A-AV (Matutino)</option>
+                        <option value="1B-AV">1B-AV (Matutino)</option>
+                        <option value="1C-PV">1C-PV</option>
+                        <option value="1D-PV">1D-PV</option>
+                        <option value="1E-GV">1E-GV</option>
+                        <option value="1F-RV">1F-RV (Vespertino)</option>
+                    </select>
+                </div>
+                <div class="w-28">
+                    <label for="inputAula" class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Aula:</label>
+                    <input type="text" id="inputAula" placeholder="Ej. Lab 1" class="w-full mt-1 bg-slate-900 border border-slate-600 text-white text-sm rounded-lg p-2.5 outline-none focus:border-cyan-500 text-center">
+                </div>
+            </div>
+        </div>
+
+        <!-- Contenedor del Escáner QR -->
+        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow flex flex-col items-center">
+            <div id="reader" class="w-full rounded-lg overflow-hidden border border-slate-600 bg-black" style="min-height: 220px;"></div>
+            <div class="flex gap-2 mt-3 w-full">
+                <button id="btnIniciar" onclick="iniciarEscaneo()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2 px-4 rounded-lg text-sm transition shadow">
+                    Iniciar Cámara
+                </button>
+                <button id="btnDetener" onclick="detenerEscaneo()" disabled class="flex-1 bg-rose-600/50 text-slate-300 font-medium py-2 px-4 rounded-lg text-sm transition shadow cursor-not-allowed">
+                    Detener
+                </button>
+            </div>
+        </div>
+
+        <!-- Alerta de Último Registro -->
+        <div id="alertBox" class="hidden p-4 rounded-xl border text-sm font-medium shadow transition-all">
+            <div id="alertTitle" class="font-bold text-base mb-1"></div>
+            <div id="alertBody"></div>
+        </div>
+
+        <!-- Historial Reciente de la Sesión -->
+        <div class="bg-slate-800 p-4 rounded-xl border border-slate-700 shadow flex flex-col gap-2">
+            <div class="flex justify-between items-center">
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Registrados en esta sesión</span>
+                <span id="contadorAsistencia" class="bg-cyan-900 text-cyan-300 text-xs font-bold px-2.5 py-0.5 rounded-full">0</span>
+            </div>
+            <div id="listaRecientes" class="flex flex-col gap-2 max-h-48 overflow-y-auto text-xs pr-1">
+                <p class="text-slate-500 italic text-center py-4">Aún no hay registros en esta sesión.</p>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Script de Lógica con Supabase -->
+    <script>
+        // Credenciales de Supabase
+        const SUPABASE_URL = "https://wsyzdjstrneginkighbl.supabase.co";
+        const SUPABASE_ANON_KEY = "sb_publishable_pzJ3LD9jGENibkqQl5lLgw_s8NRcnTT";
+
+        // Inicializar cliente de Supabase
+        const { createClient } = supabase;
+        const _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let html5QrCode;
+        let isScanning = false;
+        let registrosSesion = [];
+
+        function onScanSuccess(decodedText, decodedResult) {
+            if (!isScanning) return;
+
+            // Pausar momentáneamente el escaneo para evitar lecturas repetidas
+            detenerEscaneo();
+
+            // Formato del QR del alumno: "Nombre Completo" (el grupo y materia se toman de la selección superior)
+            const nombreAlumno = decodedText.trim();
+            const materiaSeleccionada = document.getElementById("selectMateria").value;
+            const grupoSeleccionado = document.getElementById("selectGrupo").value;
+            const aulaIngresada = document.getElementById("inputAula").value.trim() || "Sin especificar";
+
+            const ahora = new Date();
+            const fechaHora = ahora.toLocaleDateString() + " " + ahora.toLocaleTimeString();
+
+            const datosRegistro = {
+                fecha_hora: fechaHora,
+                nombre_alumno: nombreAlumno,
+                materia: materiaSeleccionada,
+                grupo_turno: grupoSeleccionado,
+                aula: aulaIngresada
+            };
+
+            mostrarAlerta("success", "¡Asistencia Registrada!", `${nombreAlumno} (${grupoSeleccionado})<br><span class="text-xs text-slate-300">${fechaHora} - Aula: ${aulaIngresada}</span>`);
+            agregarAListaRecientes(datosRegistro);
+
+            // Enviar datos a Supabase
+            enviarASupabase(datosRegistro);
+
+            // Reactivar el escáner automáticamente después de 2.5 segundos
+            setTimeout(() => {
+                iniciarEscaneo();
+            }, 2500);
+        }
+
+        function onScanFailure(error) {
+            // Ignorar errores de cuadro por cuadro
+        }
+
+        function iniciarEscaneo() {
+            if (isScanning) return;
+
+            const qrconfig = { fps: 10, qrbox: { width: 220, height: 220 } };
+            html5QrCode = new Html5Qrcode("reader");
+
+            html5QrCode.start(
+                { facingMode: "environment" }, 
+                qrconfig, 
+                onScanSuccess, 
+                onScanFailure
+            ).then(() => {
+                isScanning = true;
+                document.getElementById("btnIniciar").disabled = true;
+                document.getElementById("btnIniciar").className = "flex-1 bg-emerald-600/50 text-slate-300 font-medium py-2 px-4 rounded-lg text-sm transition shadow cursor-not-allowed";
+                
+                document.getElementById("btnDetener").disabled = false;
+                document.getElementById("btnDetener").className = "flex-1 bg-rose-600 hover:bg-rose-500 text-white font-medium py-2 px-4 rounded-lg text-sm transition shadow cursor-pointer";
+            }).catch(err => {
+                console.error("No se pudo iniciar la cámara: ", err);
+                alert("Error al acceder a la cámara. Asegúrate de dar permisos en tu navegador.");
+            });
+        }
+
+        function detenerEscaneo() {
+            if (!isScanning || !html5QrCode) return;
+
+            html5QrCode.stop().then(() => {
+                isScanning = false;
+                document.getElementById("btnIniciar").disabled = false;
+                document.getElementById("btnIniciar").className = "flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2 px-4 rounded-lg text-sm transition shadow cursor-pointer";
+                
+                document.getElementById("btnDetener").disabled = true;
+                document.getElementById("btnDetener").className = "flex-1 bg-rose-600/50 text-slate-300 font-medium py-2 px-4 rounded-lg text-sm transition shadow cursor-not-allowed";
+            }).catch(err => {
+                console.error("Error al detener el escáner: ", err);
+            });
+        }
+
+        function mostrarAlerta(tipo, titulo, mensaje) {
+            const box = document.getElementById("alertBox");
+            const titleEl = document.getElementById("alertTitle");
+            const bodyEl = document.getElementById("alertBody");
+
+            box.classList.remove("hidden", "bg-emerald-950", "border-emerald-600", "text-emerald-200", "bg-rose-950", "border-rose-600", "text-rose-200");
+
+            if (tipo === "success") {
+                box.classList.add("bg-emerald-950", "border-emerald-600", "text-emerald-200");
+            } else {
+                box.classList.add("bg-rose-950", "border-rose-600", "text-rose-200");
+            }
+
+            titleEl.innerHTML = titulo;
+            bodyEl.innerHTML = mensaje;
+        }
+
+        function agregarAListaRecientes(datos) {
+            registrosSesion.unshift(datos);
+            const lista = document.getElementById("listaRecientes");
+            document.getElementById("contadorAsistencia").innerText = registrosSesion.length;
+
+            let html = "";
+            registrosSesion.forEach(item => {
+                html += `
+                    <div class="bg-slate-900 p-2 rounded border border-slate-700 flex justify-between items-center">
+                        <div>
+                            <span class="font-semibold text-slate-200">${item.nombre_alumno}</span>
+                            <span class="text-cyan-400 text-[10px] ml-1 px-1 bg-slate-800 rounded">${item.grupo_turno}</span>
+                        </div>
+                        <span class="text-slate-400 text-[10px]">${item.fecha_hora.split(" ")[1]}</span>
+                    </div>
+                `;
+            });
+            lista.innerHTML = html;
+        }
+
+        async function enviarASupabase(datos) {
+            try {
+                const { error } = await _supabase
+                    .from('asistencias')
+                    .insert([datos]);
+
+                if (error) {
+                    console.error("Error al guardar en Supabase:", error.message);
+                } else {
+                    console.log("Asistencia guardada con éxito en la nube.");
+                }
+            } catch (err) {
+                console.error("Error de conexión:", err);
+            }
+        }
+    </script>
+</body>
+</html>
