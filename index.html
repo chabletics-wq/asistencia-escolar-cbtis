@@ -189,12 +189,14 @@
         }
 
         function enviarASheets(datos) {
-            if (https://script.google.com/macros/s/AKfycbxSnRypJiEs1KvJFOr78Oa0LonmCCdlOSfAcLsCgFfd80PgyRcpF9ryZAhTxPf47dVo/exec.includes("TU_SCRIPT_ID")) {
+            const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxSnRypJiEs1KvJFOr78Oa0LonmCCdlOSfAcLsCgFfd80PgyRcpF9ryZAhTxPf47dVo/exec";
+
+            if (GOOGLE_SCRIPT_URL.includes("TU_SCRIPT_ID")) {
                 console.warn("URL de Google Sheets no configurada. El registro solo es local.");
                 return;
             }
 
-            fetch(https://script.google.com/macros/s/AKfycbxSnRypJiEs1KvJFOr78Oa0LonmCCdlOSfAcLsCgFfd80PgyRcpF9ryZAhTxPf47dVo/exec, {
+            fetch(GOOGLE_SCRIPT_URL, {
                 method: "POST",
                 mode: "no-cors",
                 headers: {
